@@ -1,5 +1,5 @@
-const Migrations = artifacts.require("Migrations");
+const ERC721MarketPlace = artifacts.require("ERC721MarketPlace");
 
 module.exports = function (deployer) {
-  deployer.deploy(Migrations);
+  deployer.deploy(ERC721MarketPlace);
 };
