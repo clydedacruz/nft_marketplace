@@ -20,8 +20,6 @@ contract ERC721MarketPlace {
 
     event NftSaleEvent(uint256 saleId, NftSaleEventType eventType);
 
-    event LoggingEvent(bytes32 message);
-
     IERC721 nftTokenContract;
 
     constructor(address _nftContractAddress) {
@@ -50,16 +48,16 @@ contract ERC721MarketPlace {
 
     uint256 private saleCounter;
 
-    /**
-     * Caller must approve transfer of the NFT mentioned in the sale.
-     */
+    /// @notice Creates a limited time auction for a specified NFT
+    /// @dev The caller must approve transfer of this NFT to this contract address before calling this function
+    /// @param listedNftIdentifier The uint256 ID of the NFT that is to be sold
+    /// @param minBidPrice The minimum bid pice in ether
+    /// @param saleTimePeriod Time in seconds after which this sale will end. Time is considered from current block time
     function createSale(
         uint256 listedNftIdentifier,
         uint256 minBidPrice,
         uint256 saleTimePeriod
     ) public {
-        // check if nft is valid
-        // check if sender is current owner of NFT
         // validate sale end time
         // validate min bid price
 
@@ -70,13 +68,12 @@ contract ERC721MarketPlace {
             listedNftIdentifier
         );
 
-        // create sale
-
+        // construct sale
         sales[saleCounter] = NftSale(
             msg.sender,
             listedNftIdentifier,
             minBidPrice,
-            block.timestamp + saleTimePeriod, // this should be some function of blocktime
+            block.timestamp + saleTimePeriod,
             address(0),
             0,
             NftSaleStatus.ACTIVE,
@@ -122,7 +119,6 @@ contract ERC721MarketPlace {
         if (previousBidData.highestBid > 0) {
             pendingRefunds[previousBidData.highestBidder] = previousBidData
                 .highestBid;
-            emit LoggingEvent("refunded previous highest bidder");
         }
         emit NftSaleEvent(saleId, NftSaleEventType.BID_CREATED);
     }
@@ -133,7 +129,7 @@ contract ERC721MarketPlace {
         payable(msg.sender).transfer(amount);
     }
 
-    /// 
+    ///
     function claimNft(uint256 saleId) public {
         // check if sale is proper
         NftSale memory sale = validateSale(saleId);
@@ -162,6 +158,9 @@ contract ERC721MarketPlace {
         // check if sale is proper
         NftSale memory sale = validateSale(saleId);
 
+        // Sale should be in active state when this call is made
+        require(sale.status == NftSaleStatus.ACTIVE, "Sale not active");
+
         // Revert the call if the auction period is not over.
         require(block.timestamp > sale.saleEndTime, "Auction not yet ended");
 
@@ -170,6 +169,8 @@ contract ERC721MarketPlace {
 
         // close sale
         sale.status = NftSaleStatus.ENDED;
+
+        sales[saleId] = sale;
         emit NftSaleEvent(saleId, NftSaleEventType.SALE_ENDED);
     }
 }

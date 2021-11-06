@@ -22,11 +22,7 @@ contract("Marketplace contract - Sale creation", async accounts => {
 
         let sellerToken = await musicNftInstance.tokenOfOwnerByIndex(nftSeller, 0);
         tokenIdOfSellersNft = sellerToken.toString();
-        console.log("Token ID of seller's NFT:" + tokenIdOfSellersNft);
-
-        console.log("Marketplace contract address: " + marketPlaceInstance.address);
-
-    });
+      });
 
     it("fail to create sale if transfer of NFT is not pre-approved to marketplace contract address", async () => {
 
@@ -70,16 +66,12 @@ contract("Marketplace contract - Sale creation", async accounts => {
     });
 
     it("successfully create sale", async () => {
-        // // approve transfer to marketplace contract 
-        // await musicNftInstance.approve(marketPlaceInstance.address, tokenIdOfSellersNft, { from: nftSeller });
-
         // create sale on marketplace
         await marketPlaceInstance.createSale(tokenIdOfSellersNft, 10000000, 120, { from: nftSeller });
     });
 
     it("succesfully show created sale", async () => {
         let createdSales = await marketPlaceInstance.getSale(0);
-        console.log('Created sales: \n', createdSales.toString());
     });
 
 

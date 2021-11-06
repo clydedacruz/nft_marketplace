@@ -24,9 +24,6 @@ contract("Marketplace contract - bid for sale", async accounts => {
 
         let sellerToken = await musicNftInstance.tokenOfOwnerByIndex(nftSeller, 0);
         tokenIdOfSellersNft = sellerToken.toString();
-        console.log("Token ID of seller's NFT:" + tokenIdOfSellersNft);
-
-        console.log("Marketplace contract address: " + marketPlaceInstance.address);
 
         // approve transfer to marketplace contract 
         await musicNftInstance.approve(marketPlaceInstance.address, tokenIdOfSellersNft, { from: nftSeller });
@@ -58,19 +55,15 @@ contract("Marketplace contract - bid for sale", async accounts => {
     // sucessful bid
     it("successful bid ", async () => {
         let initialbalance = await web3.eth.getBalance(bidder1);
-        console.log("balance before bid", initialbalance);
 
         let bidAmt = 10000001;
         await marketPlaceInstance.bidForSale(0, { from: bidder1, value: 10000001 });
         // check if highestbidder is changed
         let saleData = await marketPlaceInstance.getSale(0);
-        console.log('Sale0 data: \n', saleData.toString());
         let currentHighestBidder = saleData[4];
         let currentHighestBid = saleData[5];
 
         let balanceAfterBid = await web3.eth.getBalance(bidder1);
-        console.log("balance after bid", balanceAfterBid);
-
 
         assert.equal(currentHighestBidder, bidder1);
         assert.equal(currentHighestBid, bidAmt);
@@ -83,13 +76,12 @@ contract("Marketplace contract - bid for sale", async accounts => {
         );
     });
 
-    it("sucessfull new bid should refund previous highest bidder", async () => {
+    it("successfull new bid should refund previous highest bidder", async () => {
         let saleData = await marketPlaceInstance.getSale(0);
         let oldHighestBidder = saleData[4];
         let oldHighestBid = saleData[5];
 
         let initialbalance = await web3.eth.getBalance(oldHighestBidder);
-        console.log("initial balance of old highest bidder", initialbalance);
 
         // bidder 2 executes new bid 
         let newBidAmt = 10000000002;
@@ -99,7 +91,6 @@ contract("Marketplace contract - bid for sale", async accounts => {
 
         // check new balance of previous highest bidder
         let balanceAfterOutbid = await web3.eth.getBalance(oldHighestBidder);
-        console.log("updated balance of old highest bidder", balanceAfterOutbid);
 
         // let expectednewBal = (web3.utils.toBN(initialbalance).add(web3.utils.toBN(oldHighestBid))).toString();
         expect(web3.utils.toBN(balanceAfterOutbid).gt(web3.utils.toBN(initialbalance)));
