@@ -35,8 +35,15 @@ contract ERC721MarketPlace {
         bool isValid;
     }
 
-    mapping(uint256 => NftSale) public sales;
-    uint256 saleCounter;
+    mapping(uint256 => NftSale) private sales;
+
+
+    /// Given saleId returns the sale if it exists
+    function getSale(uint256 saleId) public view returns (NftSale memory) {
+        return validateSale(saleId);
+    }
+
+    uint256 private saleCounter;
 
     /**
      * Caller must approve transfer of the NFT mentioned in the sale.
