@@ -27,7 +27,6 @@ contract("Marketplace contract - Sale creation", async accounts => {
     it("fail to create sale if transfer of NFT is not pre-approved to marketplace contract address", async () => {
 
         // approve transfer to marketplace contract 
-        // await musicNftInstance.approve(marketPlaceInstance.address, tokenIdOfSellersNft, { from: nftSeller });
 
         await truffleAssert.reverts(
             // create sale on marketplace with incorrect token ID
@@ -73,9 +72,4 @@ contract("Marketplace contract - Sale creation", async accounts => {
     it("succesfully show created sale", async () => {
         let createdSales = await marketPlaceInstance.getSale(0);
     });
-
-
-
-    // test with bad sale end time 
-    // test with bad bid price 
 });
