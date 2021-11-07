@@ -4,8 +4,11 @@ This project contains an Ethereum smart contract written in Solidity, which can 
 - Ether is used as currency for bids. 
 - All bid amounts are specified in wei.
 
+**Contract source files**    
 The following solidity files are included as part of this distribution
-
+- `contracts\ERC721MarketPlace.sol` - The ERC721 market place solidity smart contract. 
+- `contracts\IERC721.sol` - ERC721 Interface spec as per https://eips.ethereum.org/EIPS/eip-721 
+- `contracts\MusicNFT.sol` - Example ERC721 implementation used for testing and demonstrating functionality of ERC721MarketPlace. 
 ## 1. Pre-requisites
 Dependenecy versions mentioned here are only for guidance. 
 These are the versions I used while building this.
