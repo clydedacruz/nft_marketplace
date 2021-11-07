@@ -67,6 +67,10 @@ contract("Marketplace contract - Sale creation", async accounts => {
     it("successfully create sale", async () => {
         // create sale on marketplace
         await marketPlaceInstance.createSale(tokenIdOfSellersNft, 10000000, 120, { from: nftSeller });
+
+        let saleList = await marketPlaceInstance.getSales();
+        assert(saleList.length == 1);
+
     });
 
     it("succesfully show created sale", async () => {

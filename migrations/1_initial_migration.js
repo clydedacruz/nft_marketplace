@@ -11,5 +11,4 @@ module.exports = async function (deployer) {
 
  await deployer.deploy(ERC721MarketPlace, musicNftContractAddress);
 
- let marketplaceInstance =  await ERC721MarketPlace.deployed();
 };

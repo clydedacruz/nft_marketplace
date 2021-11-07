@@ -18,14 +18,6 @@ contract ERC721MarketPlace {
         NFT_CLAIMED
     }
 
-    event NftSaleEvent(uint256 saleId, NftSaleEventType eventType);
-
-    IERC721 nftTokenContract;
-
-    constructor(address _nftContractAddress) {
-        nftTokenContract = IERC721(_nftContractAddress);
-    }
-
     struct NftSale {
         address poster;
         uint256 item;
@@ -33,24 +25,59 @@ contract ERC721MarketPlace {
         uint256 saleEndTime;
         address highestBidder;
         uint256 highestBid;
-        NftSaleStatus status; // Active, Ended
+        NftSaleStatus status;
         bool isValid;
     }
 
-    mapping(address => uint256) private pendingRefunds;
+    IERC721 internal nftTokenContract;
 
-    mapping(uint256 => NftSale) private sales;
+    mapping(address => uint256) internal pendingRefunds;
 
-    /// Given saleId returns the sale if it exists
-    function getSale(uint256 saleId) public view returns (NftSale memory) {
-        return validateSale(saleId);
+    mapping(uint256 => NftSale) internal sales;
+
+    uint256 internal saleCounter;
+
+    event NftSaleEvent(uint256 saleId, NftSaleEventType eventType);
+    event BidRefundEvent(address beneficiary, uint256 refundAmount);
+
+    constructor(address _nftContractAddress) {
+        nftTokenContract = IERC721(_nftContractAddress);
     }
 
-    uint256 private saleCounter;
+    // external functions
+
+    /// @notice Lets a user bid for a particular NFT sale
+    /// @dev The caller must include the ether in the 'value' part of the transaction while executing a bid transaction.
+    /// @param saleId The uint256 ID of the sale for which the user can bid on
+    function bidForSale(uint256 saleId) external payable {
+        NftSale memory previousBidData;
+        // check if sale is proper
+        NftSale memory sale = validateSale(saleId);
+        previousBidData = sale;
+        // Revert the call if the auction period is over.
+        require(block.timestamp <= sale.saleEndTime, "Auction already ended.");
+
+        // check price
+        require(
+            msg.value > sale.highestBid && msg.value >= sale.minBidPrice,
+            "Bid should be higher than min bid price and existing highest bid"
+        );
+
+        sale.highestBid = msg.value;
+        sale.highestBidder = msg.sender;
+        sales[saleId] = sale;
+
+        // refund ether of previous bidder
+        if (previousBidData.highestBid > 0) {
+            pendingRefunds[previousBidData.highestBidder] = previousBidData
+                .highestBid;
+        }
+        emit NftSaleEvent(saleId, NftSaleEventType.BID_CREATED);
+    }
 
     /// @notice Creates a limited time auction for a specified NFT
     /// @dev The caller must approve transfer of this NFT to this contract address before calling this function.
-    ///      Overflow of minBidPrice (though highly improbably) would already be checked by compiler.
+    ///      Overflow of minBidPrice (though highly improbably) would already be checked by compiler for this version of solidity.
     /// @param listedNftIdentifier The uint256 ID of the NFT that is to be sold
     /// @param minBidPrice The minimum bid pice in ether.
     /// @param saleTimePeriod Time in seconds after which this sale will end. Time is considered from current block time
@@ -58,7 +85,7 @@ contract ERC721MarketPlace {
         uint256 listedNftIdentifier,
         uint256 minBidPrice,
         uint256 saleTimePeriod
-    ) public {
+    ) external {
         // validate sale end time
         // validate min bid price
 
@@ -86,53 +113,32 @@ contract ERC721MarketPlace {
         emit NftSaleEvent(saleCounter - 1, NftSaleEventType.SALE_CREATED);
     }
 
-    function validateSale(uint256 saleId)
-        internal
-        view
-        returns (NftSale memory)
-    {
-        NftSale memory sale = sales[saleId];
-        require(sale.isValid, "Sale is not valid");
-        return sale;
-    }
-
-    /// @notice Lets a user bid for a particular NFT sale
-    /// @dev The caller must include the ether in the 'value' part of the transaction while executing a bid transaction.
-    /// @param saleId The uint256 ID of the sale for which the user can bid on
-    function bidForSale(uint256 saleId) public payable {
-        NftSale memory previousBidData;
-        // check if sale is proper
-        NftSale memory sale = validateSale(saleId);
-        previousBidData = sale;
-        // Revert the call if the auction period is over.
-        require(block.timestamp <= sale.saleEndTime, "Auction already ended.");
-
-        // check price
-        require(
-            msg.value > sale.highestBid && msg.value >= sale.minBidPrice,
-            "Bid should be higher than min bid price and existing highest bid"
-        );
-
-        sale.highestBid = msg.value;
-        sale.highestBidder = msg.sender;
-        sales[saleId] = sale;
-
-        // refund ether of previous bidder
-        if (previousBidData.highestBid > 0) {
-            pendingRefunds[previousBidData.highestBidder] = previousBidData
-                .highestBid;
-        }
-        emit NftSaleEvent(saleId, NftSaleEventType.BID_CREATED);
-    }
-
-    function claimBidRefund() public {
+    /// @notice Lets a user claim a refund for a bid that is no longer the highest bid
+    /// @dev This function uses the Withdrawal pattern as decribed in solidity docs
+    function claimBidRefund() external {
         uint256 amount = pendingRefunds[msg.sender];
         pendingRefunds[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
+        emit BidRefundEvent(msg.sender, amount);
     }
 
-    ///
-    function claimNft(uint256 saleId) public {
+    /// @notice Lets the sale poster end the sale after the sufficient time has elapsed. This only marks the sale complete.
+    ///         The highest bidder will then need to claim the NFT
+    /// @param saleId The uint256 ID of the sale to be ended
+    function endSale(uint256 saleId) external {
+        // check if sale is proper
+        NftSale memory sale = validateSale(saleId);
+
+        // only sale poster should be allowed to call this
+        require(msg.sender == sale.poster, "Caller is not the sale poster");
+
+        _endSale(sale, saleId);
+    }
+
+    /// @notice Lets the highest bidder claim thier NFT, or in case not bids were recieved it lets the poster claim teh NFT
+    /// @dev Highest bidder needs to expend gas to claim thier NFT. This internally also closes the sale if not closed yet.
+    /// @param saleId The uint256 ID of the relevant sale
+    function claimNft(uint256 saleId) external {
         // check if sale is proper
         NftSale memory sale = validateSale(saleId);
 
@@ -160,7 +166,31 @@ contract ERC721MarketPlace {
         emit NftSaleEvent(saleId, NftSaleEventType.NFT_CLAIMED);
     }
 
-    function _endSale(NftSale memory sale, uint256 saleId) private {
+    // External view functions
+
+    /// @notice Lets a user view details of a particular sale
+    /// @param saleId The uint256 ID of the sale
+    /// @return The NftSale object corresponding to the given saleId
+    function getSale(uint256 saleId) external view returns (NftSale memory) {
+        return validateSale(saleId);
+    }
+
+    /// @notice Returns a list of all sales
+    /// @return An array of NftSale objects
+    function getSales() external view returns (NftSale[] memory) {
+        NftSale[] memory saleArray = new NftSale[](saleCounter);
+        for (uint256 saleId = 0; saleId < saleCounter; saleId++) {
+            saleArray[saleId] = sales[saleId];
+        }
+        return saleArray;
+    }
+
+    // Internal functions
+
+    /// @dev Internal utility function that does necessary operations to end a sale
+    /// @param sale The sale object
+    /// @param saleId The uint256 ID of the sale
+    function _endSale(NftSale memory sale, uint256 saleId) internal {
         // Sale should be in active state when this call is made
         require(sale.status == NftSaleStatus.ACTIVE, "Sale not active");
 
@@ -169,20 +199,25 @@ contract ERC721MarketPlace {
 
         NftSale memory endedSale = sale;
 
-        // close sale
+        // end sale
         endedSale.status = NftSaleStatus.ENDED;
 
         sales[saleId] = endedSale;
         emit NftSaleEvent(saleId, NftSaleEventType.SALE_ENDED);
     }
 
-    function endSale(uint256 saleId) public {
-        // check if sale is proper
-        NftSale memory sale = validateSale(saleId);
+    // Internal view functions
 
-        // only sale poster should be allowed to call this
-        require(msg.sender == sale.poster, "Caller is not the sale poster");
-
-        _endSale(sale, saleId);
+    /// @dev Thsi is an internal function used to check if a sale object is a valid one i.e. properly initialized
+    /// @param saleId The uint256 ID of the sale
+    /// @return The NftSale object corresponding to the given saleId
+    function validateSale(uint256 saleId)
+        internal
+        view
+        returns (NftSale memory)
+    {
+        NftSale memory sale = sales[saleId];
+        require(sale.isValid, "Sale is not valid");
+        return sale;
     }
 }
